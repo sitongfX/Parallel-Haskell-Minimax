@@ -9,8 +9,11 @@ module Lib
     ) where
 -}
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+
+someFunc :: String -> IO ()
+someFunc config_file = do let (eSet, bList) = readConfig config_file
+                          gameStart eSet bList
+
 
 -- Int = unique identification per edge
 -- Bool = whether the edge is taken
@@ -22,7 +25,8 @@ data Box = Box {
     val :: Int
 } deriving Eq
 
-{-
+
+{- TODO: 
 instance Ord Edge where
   (Edge v1 b1) `compare` (Edge v2 b2) | v1 > b2   = GT
                                       | v2 > v1   = LT
@@ -47,19 +51,30 @@ printEdgeList [] = []
 printEdgeList (x:xs) = show x ++ " " ++ printEdgeList xs
 
 
-readConfig :: String -> Handle
+readConfig :: String -> (Set.Set Edge, [Box])
 readConfig fname = withFile fname ReadMode (\h -> initiateGameBoard h)
 
 
--- initiateGameBoard :: Handle -> IO ()
-initiateGameBoard :: (Set.Set Edge, Set.Set Box)
+{-
+-- TODO: initiateGameBoard :: Handle -> IO ()
+initiateGameBoard :: (Set.Set Edge, [Box])
 initiateGameBoard h = do res <- hIsEOF h 
                          if res
-                         then (Set.empty, Set.empty)
+                         then (Set.empty, [])
                          else do (b, eList) <- initBox h
-                                 let (eSet, bSet) = initiateGameBoard h
+                                 let (eSet, bList) = initiateGameBoard h
                                  let newESet = foldl (\s e -> Set.insert e s) eSet eList
-                                 return (newESet, Set.insert b bSet)
+                                 return (newESet, b : bList)
+-}
+initiateGameBoard :: Handle -> (Set.Set Edge, [Box])
+initiateGameBoard h = do res <- hIsEOF h 
+                         if res
+                         then (Set.empty, [])
+                         else (newESet, b : bList) 
+  where (b, eList) <- initBox h
+        (eSet, bList) = initiateGameBoard h
+        newESet = foldl (\s e -> Set.insert e s) eSet eList
+                                 
 
 
 -- initBox :: Handle -> IO ()
@@ -73,9 +88,9 @@ initBox h = do line <- hGetLine h
 
 
 -- note: computer makes the first move
-gameStart :: Set.Set Edge -> Set.Set Box -> IO ()
-gameStart edgeSet boxSet = if (Set.empty edgeSet || Set.empty boxSet)
-                               then die $ "Error: starting the game because edge set or box set is empty."
+gameStart :: Set.Set Edge -> [Box] -> IO ()
+gameStart edgeSet boxList = if (Set.empty edgeSet || length boxList == 0)
+                               then die $ "Error: starting the game because edge set or box list is empty."
                                else do let res = gameLoop edgeSet boxSet False 0 0 
                                        case res of
                                          1  -> putStrLn "Human WIN!"
@@ -98,12 +113,16 @@ Return: -1 = COMPUTER win
          1 = HUMAN win
 
 -}
-gameLoop :: Set.Set Edge -> Set.Set Map -> Bool -> Int -> Int -> Int
+gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> Int -> Int
 gameLoop eSet bList t cPlayer hPlayer = if Set.empty eSet
                                         then cmpScore cPlayer hPlayer
                                         else if t  
-                                             then do let mv =  getHumanMove eSet    -- TODO: 
-                                             else -- TODO: logic for computer move --> do block
+                                             then do let nextEdgeH =  Edge (read $ getHumanMove edgeSet) False
+                                                     let (newEdgeH, newBoxH, newScoreH) = gameAction nextEdgeH (eSet, bList, hPlayer)
+                                                     gameLoop newEdgeH newBoxH False cPlayer newScoreH
+                                             else do let nextEdgeC =  minimax eSet bList    -- TODO
+                                                     let (newEdgeC, newBoxC, newScoreC) = gameAction nextEdgeC (eSet, bList, cPlayer)
+                                                     gameLoop newEdgeC newBoxC True newScoreC hPlayer
     
 
 
@@ -124,23 +143,31 @@ cmpScore cScore hScore | cScore > hScore = -1
                        | otherwise       =  0
 
 
--- TODO: give an edge id, remove it from edge set and remove box from box list, return new set and box
--- TODO: write a Ord instance for Box (needed by Set)2
-gameAction :: Int -> Set.Set Edge -> Set.Set Box -> Int -> IO (Set.Set Edge, Set.Set Box, Int)
-gameAction eId eSet bSet score = result
-  where 
+-- TODO: Ord for Edge based on identification?
+{-
+gameAction:
 
-do let edge = head $ filter (\(Edge id _) -> id == eId) (Set.toList eSet)
-                                    let newESet = Set.delete edge eSet
-                                    let affectedBox = filter checkSameEdge (Set.toList bSet)
-                                    let bSet2 = foldl (\b -> Set.delete b bSet) affectedBox
+param1: player selected edge (type of Edge) to remove
+param2: (x1, x2, x3), s.t. x1 is the current set of available edges,
+                           x2 is the current list of available boxes,
+                           x3 is the current score of the player.
 
-                               
+Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
+                           e2 is new list of remaining boxes,
+                           e3 is the updated score
 
-  where 
-    checkSameEdge b = any (filter ((Edge id _) -> id == eId) b.edges)
-    checkBoxFilled (Box eL v) = all (\(Edge _ f) -> f) eL
-                                   
+-}
+gameAction :: Edge -> (Set.Set Edge, [Box], Int) -> (Set.Set Edge, [Box], Int)
+gameAction targetEdge (eSet,bList,score) = (Set.delete targetEdge eSet, newBoxSet, score + scoreChanged)
+  where applyAction (accl, newList) b = if (containEdge targetEdge b.edges) && (boxFilled b)
+                                       then (accl + b.val, newList)
+                                       else (accl, (newBox b) : newList)
+        newBox box = Box (newEdgeList box.edges) box.val
+        newEdgeList oldList = (Edge eId True) : (filter (/=targetEdge) oldList) 
+        containEdge tar eList = any (==targetEdge) eList
+        boxFilled box = all (/(Edge _ f) -> f) (filter (/= targetEdge) box.edges)
+        (scoreChanged, newBoxSet) = foldl applyAction (0,[]) bList
+
 
 
 getHumanMove :: eSet -> IO Int
@@ -159,174 +186,15 @@ getHumanMove eSet = do putStrLn "Please make the next move."
 
 
 
-
-
-
-
+-------------------------------------------------------------------------------------------------------
 
 
 {-
-
-class Game: #A class for managing different situations and states happening in the game and on the board
-
-    def Initiate(self): #initiating the game board with X and Y dimensions
-        for i in range(0, self.dimY):
-            R = []
-            for j in range (0, self.dimX):
-                if i % 2 == 1 and j % 2 == 1:
-                    R.append(randint(1, 9))  # Assigning a random number from 1 to 9 to the spots in the board as the points
-                elif i % 2 == 0 and j % 2 == 0:
-                    R.append('*') # printing asterisks as the dots in the board
-                else:
-                    R.append(' ') # adding extra space for actions in the game
-            self.Mat.append(R)
-
-    def action(self, i, j): # Applying the actions made by the human or the computer
-        Sum = 0
-
-        if j % 2 == 0 and i % 2 == 1:
-            self.Mat[j][i] = '-'
-            if j < self.dimY - 1:
-                if self.Mat[j+2][i] == '-' and self.Mat[j+1][i+1] == '|' and self.Mat[j+1][i-1] == '|':
-                    Sum += self.Mat[j+1][i]
-            if j > 0:
-                if self.Mat[j-2][i] == '-' and self.Mat[j-1][i+1] == '|' and self.Mat[j-1][i-1] == '|':
-                    Sum += self.Mat[j-1][i]
-
-        else:
-            self.Mat[j][i] = '|'
-            if i < self.dimX - 1:
-                if self.Mat[j][i+2] == '|' and self.Mat[j+1][i+1] == '-' and self.Mat[j-1][i+1] == '-':
-                    Sum += self.Mat[j][i+1]
-            if i > 0:
-                if self.Mat[j][i-2] == '|' and self.Mat[j+1][i-1] == '-' and self.Mat[j-1][i-1] == '-':
-                    Sum += self.Mat[j][i-1]
-        return Sum
-
-
-class Algo: # A class for defining algorithms used (minimax and alpha-beta pruning)
-    
-    def miniMax(State, Ply_num): # Function for the minimax algorithm
-
-        for i in range(State.Current.dimY):
-            for j in range(State.Current.dimX):
-                if State.Current.Mat[i][j] == ' ' and (j, i) not in State.children:
-                    State.Make(j, i, True)
-                    if Ply_num < 2:
-                        return (i, j)
-
-        Minimum_Score = 1000
-        i = 0
-        j = 0
-        for k, z in State.children.items():
-            Result = Algo.Maximum(z, Ply_num - 1, Minimum_Score)
-            if Minimum_Score > Result:
-                Minimum_Score = Result
-                i = k[0]
-                j = k[1]
-
-        return (i, j)
-
-
-    def Maximum(State, Ply_num, Alpha): # Alpha-beta pruning function for taking care of Alpha values
-        if Ply_num == 0:
-            return State.CurrentScore
-
-        for i in range(State.Current.dimY):
-            for j in range(State.Current.dimX):
-                if State.Current.Mat[i][j] == ' ' and (j, i) not in State.children:
-                    State.Make(j, i, False)
-
-        Maximum_Score = -1000
-        i = 0
-        j = 0
-        for k, z in State.children.items():
-            Result = Algo.Minimum(z, Ply_num - 1, Maximum_Score)
-            if Maximum_Score < Result:
-                Maximum_Score = Result
-            if Result > Alpha:
-                return Result
-
-        return Maximum_Score
-
-
-    def Minimum(State, Ply_num, Beta): # Alpha-beta pruning function for taking care of Beta values
-        if Ply_num == 0:
-            return State.CurrentScore
-
-        for i in range(State.Current.dimY):
-            for j in range(State.Current.dimX):
-                if State.Current.Mat[i][j] == ' ' and (j, i) not in State.children:
-                    State.Make(j, i, True)
-
-        Minimum_Score = 1000
-        i = 0
-        j = 0
-        for k, z in State.children.items():
-            Result = Algo.Maximum(z, Ply_num - 1, Minimum_Score)
-            if Minimum_Score > Result:
-                Minimum_Score = Result
-            if Result < Beta:
-                return Result
-
-        return Minimum_Score
-
-
-class DotsNBoxes: # A class for managing the moves made by the human and the computer
-    def __init__(self, Board_Xdim, Board_Ydim, Ply_num):
-        currentState = Game([], Board_Xdim, Board_Ydim)
-        currentState.Initiate()
-        self.State = Thing(currentState)
-        self.Ply_num = Ply_num
-        self.Score = 0
-
-    def Human(self): # Defining the Human player and his actions/Choices
-        self.State.Draw()
-
-        HumanX = int(input("Please enter the 'X' coordinate of your choice (an integer such as 4): "))
-        HumanY = int(input("Please enter the 'Y' coordinate of your choice (an integer such as 4): "))
-        if (HumanX, HumanY) not in self.State.children:
-            self.State.Make(HumanX, HumanY, False)
-            self.State = self.State.children[(HumanX, HumanY)]
-        else:
-            self.State = self.State.children[(HumanX, HumanY)]
-
-        print("Current Score =====>> Your Score - AI Score = " + str(self.State.CurrentScore),end ="\n\n\n")
-
-        self.Computer()
-
-
-    def Computer(self): # Defining the Computer player and its actions/Choices
-        self.State.Draw()
-
-        move = Algo.miniMax(self.State, self.Ply_num)
-
-        self.State = self.State.children[(move[0], move[1])]
-
-        print("AI selected the following coordinates to play:\n" + "(" ,str(move[0]), ", " + str(move[1]), ")", end = "\n\n")
-
-        print("Current Score =====>> Your Score - AI Score = " + str(self.State.CurrentScore), end = "\n\n\n")
-
-        if len(self.State.children) == 0:
-            self.State.Draw()
-            self.Evaluation()
-            return
-
-        self.Human()
-
-    def Evaluation(self): # Evaluation function for taking care of the final scores
-        print("Stop this Madness!!!\n")
-        if self.State.CurrentScore > 0:
-            print("You won you crazy little unicorn!! You are the new hope for the mankind!")
-            exit()
-        elif self.State.CurrentScore < 0:
-            print("!!! Inevitable Doom!!! You were crushed by the AI!! ")
-            exit()
-        else:
-            print("Draw! Well Congratulations! you are as smart as the AI!")
-            exit()
-
-    def start(self):
-        self.Human()
-
+do let edge = head $ filter (\(Edge id _) -> id == eId) (Set.toList eSet)
+                                    let newESet = Set.delete edge eSet
+                                    let affectedBox = filter checkSameEdge (Set.toList bSet)
+                                    let bSet2 = foldl (\b -> Set.delete b bSet) affectedBox
+  where 
+    checkSameEdge b = any (filter ((Edge id _) -> id == eId) b.edges)
+    checkBoxFilled (Box eL v) = all (\(Edge _ f) -> f) eL
 -}
