@@ -1,26 +1,28 @@
+
+
+
+module Lib
+    ( someFunc
+    ) where
+
+
 import qualified Data.Set as Set
 import System.IO(Handle, hGetLine, hIsEOF, withFile, IOMode(ReadMode))
 import System.Exit(die)
 import Control.Monad
 
-{-
-module Lib
-    ( someFunc
-    ) where
--}
-
 
 someFunc :: String -> IO ()
-someFunc config_file = do let (eSet, bList) = readConfig config_file
+someFunc config_file = do (eSet, bList) <- readConfig config_file
                           gameStart eSet bList
 
 
 -- Int = unique identification per edge
 -- Bool = whether the edge is taken
-data Edge = Edge Int Bool deriving Eq
+data Edge = Edge {eid :: Int, flag :: Bool}
 
 
-data Box = Box { 
+data Box = Box {
     edges :: [Edge],
     val :: Int
 } deriving Eq
@@ -48,35 +50,35 @@ printEdgeList [] = []
 printEdgeList (x:xs) = show x ++ " " ++ printEdgeList xs
 
 
-readConfig :: String -> (Set.Set Edge, [Box])
+readConfig :: String -> IO (Set.Set Edge, [Box])
 readConfig fname = withFile fname ReadMode (\h -> initiateGameBoard h)
 
 
 initiateGameBoard :: Handle -> IO (Set.Set Edge, [Box])
-initiateGameBoard h = do res <- hIsEOF h 
+initiateGameBoard h = do res <- hIsEOF h
                          if res
                          then return (Set.empty, [])
                          else do (b, eList) <- initBox h
-                                 let (eSet, bList) = initiateGameBoard h
+                                 (eSet, bList) <- initiateGameBoard h
                                  let newESet = foldl (\s e -> Set.insert e s) eSet eList
                                  return (newESet, b : bList)
 
 
 initBox :: Handle -> IO (Box, [Edge])
 initBox h = do line <- hGetLine h
-               case (words line) of 
+               case (words line) of
                  l@[v, e1, e2, e3, e4] -> do let edgeL = foldl (\acc x -> (Edge (read x) False) : acc) [] (tail l)
                                              let box = Box edgeL (read v)
                                              return (box, edgeL)
-                 _ -> die $ "Board Configuration Read Error."    
+                 _ -> die $ "Board Configuration Read Error."
 
 
 -- note: computer makes the first move
 gameStart :: Set.Set Edge -> [Box] -> IO ()
-gameStart edgeSet boxList = if (Set.empty edgeSet || length boxList == 0)
+gameStart edgeSet boxList = if (Set.null edgeSet || length boxList == 0)
                                then die $ "Error: starting the game because edge set or box list is empty."
-                               else do let res = gameLoop edgeSet boxSet False 0
-                                       case (res `compare` 0) of
+                               else do res <- gameLoop edgeSet boxList False 0
+                                       case res `compare` 0 of
                                          LT -> putStrLn "Human WIN!"
                                          EQ -> putStrLn "DRAW!"
                                          GT -> putStrLn "Computer WIN!"
@@ -97,17 +99,18 @@ Return: -1 = COMPUTER win
          1 = HUMAN win
 
 -}
-gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> Int
-gameLoop eSet bList t AIscore = if Set.empty eSet
-                                then AIscore
-                                else if t  
-                                     then do let nextEdgeH =  Edge (read $ getHumanMove edgeSet) False
-                                             let (newEdgeH, newBoxH, newScoreH) <- nextGameState nextEdgeH (eSet, eList) AIscore t
+gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
+gameLoop eSet bList t aiScore = if Set.null eSet
+                                then return aiScore
+                                else if t
+                                     then do eId <- getHumanMove eSet
+                                             let nextEdgeH =  Edge eId False
+                                             let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
                                              gameLoop newEdgeH newBoxH False newScoreH
-                                     else do let nextEdgeC =  minimax False (eSet, bList, AIscore) (Edge 0 False) 
-                                             let (newEdgeC, newBoxC, newScoreC) <- nextGameState nextEdgeC (eSet, eList) AIscore t
+                                     else do let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+                                             let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
                                              gameLoop newEdgeC newBoxC True newScoreC
-    
+
 
 
 {-
@@ -127,10 +130,10 @@ cmpScore cScore hScore | cScore > hScore = -1
 -}
 
 
-nextGameState :: Edge -> (Set.Set Edge, [Box]) -> Int -> Bool -> IO (Set.Set Edge, [Box], Int)
-nextGameState e (eSet, bList) score player = if player 
-                                             then return (newS, newL, score - sUpdate)
-                                             else return (newS, newL, score + sUpdate)
+nextGameState :: Edge -> (Set.Set Edge, [Box]) -> Int -> Bool -> (Set.Set Edge, [Box], Int)
+nextGameState e (eSet, bList) score player = if player
+                                             then  (newS, newL, score - sUpdate)
+                                             else  (newS, newL, score + sUpdate)
                                              where (newS, newL, sUpdate) = gameAction e (eSet, bList)
 
 
@@ -148,27 +151,47 @@ Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
 
 -}
 gameAction :: Edge -> (Set.Set Edge, [Box]) -> (Set.Set Edge, [Box], Int)
-gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxSet, scoreChanged)
-  where applyAction (accl, newList) b = if (containEdge targetEdge b.edges) && (boxFilled b)
-                                       then (accl + b.val, newList)
+gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, scoreChanged)
+  where applyAction (accl, newList) b = if (containEdge targetEdge (edges b)) && (boxFilled b)
+                                       then (accl + (val b), newList)
                                        else (accl, (newBox b) : newList)
-        newBox box = Box (newEdgeList box.edges) box.val
-        newEdgeList oldList = (Edge eId True) : (filter (/=targetEdge) oldList) 
+        newBox box = Box (newEdgeList (edges box)) (val box)
+        newEdgeList oldList = (Edge (eid targetEdge) True) : (filter (/=targetEdge) oldList)
         containEdge tar eList = any (==targetEdge) eList
-        boxFilled box = all (/(Edge _ f) -> f) (filter (/= targetEdge) box.edges)
-        (scoreChanged, newBoxSet) = foldl applyAction (0,[]) bList
+        boxFilled box = all (\(Edge _ f) -> f) (filter (/= targetEdge) (edges box))
+        (scoreChanged, newBoxList) = foldl applyAction (0,[]) bList
 
 
 
-getHumanMove :: eSet -> IO Int
+getHumanMove :: Set.Set Edge -> IO Int
 getHumanMove eSet = do putStrLn "Please make the next move."
                        putStrLn $ "Available edges: " ++ (printEdgeList (Set.toList eSet))
                        mv <- getLine
                        return $ read mv
-                    
 
 
 
+minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
+minimax player (edgeset,boxlist, aiScore) edge
+    | terminal                         = (aiScore, edge)
+    | player == False                  = bestMove [minimax True x e | (x, e) <- expandedStates]
+    | player == True                   = worstMove [minimax False x e | (x, e) <- expandedStates]
+    where
+        expandedStates = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+        terminal = Set.null edgeset
+
+
+
+bestMove :: [(Int, Edge)] -> (Int, Edge)
+bestMove [(score, edge)]       = (score, edge)
+bestMove ((score, edge):(score', edge'):xs) = bestMove (if score >= score' then (score, edge):xs else (score', edge'):xs)
+bestMove _  = error "fine"
+
+
+worstMove :: [(Int, Edge)] -> (Int, Edge)
+worstMove [(score, edge)]       = (score, edge)
+worstMove ((score, edge):(score', edge'):xs) = worstMove (if score <= score' then (score, edge):xs else (score', edge'):xs)
+worstMove _  = error "fine"
 
 
 
