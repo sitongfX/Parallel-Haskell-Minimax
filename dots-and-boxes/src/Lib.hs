@@ -10,10 +10,13 @@ import qualified Data.Set as Set
 import System.IO(Handle, hGetLine, hIsEOF, withFile, IOMode(ReadMode))
 import System.Exit(die)
 import Control.Monad
+import Debug.Trace
 
 
 someFunc :: String -> IO ()
 someFunc config_file = do (eSet, bList) <- readConfig config_file
+                          putStrLn (printEdgeList (Set.toList eSet))
+                          putStrLn "before game starts"
                           gameStart eSet bList
 
 
@@ -77,7 +80,8 @@ initBox h = do line <- hGetLine h
 gameStart :: Set.Set Edge -> [Box] -> IO ()
 gameStart edgeSet boxList = if (Set.null edgeSet || length boxList == 0)
                                then die $ "Error: starting the game because edge set or box list is empty."
-                               else do res <- gameLoop edgeSet boxList False 0
+                               else do putStrLn "inside game starts, before game loop"
+                                       res <- gameLoop edgeSet boxList False 0
                                        case res `compare` 0 of
                                          LT -> putStrLn "Human WIN!"
                                          EQ -> putStrLn "DRAW!"
@@ -99,19 +103,80 @@ Return: -1 = COMPUTER win
          1 = HUMAN win
 
 -}
+-- gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
+-- gameLoop eSet bList t aiScore = if Set.null eSet
+--                                 then return aiScore
+--                                 else if t
+--                                      then do putStrLn "before human move ,eid"
+--                                              eId <- getHumanMove eSet
+--                                              putStrLn "in game move after human move"
+--                                              let nextEdgeH =  Edge eId False
+--                                              let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
+--                                              putStrLn "finish human start computer"
+--                                              resH <- gameLoop newEdgeH newBoxH False newScoreH
+--                                              return resH
+--                                      else do putStrLn "in game move before computer move"
+--                                              let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+--                                              let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
+--                                              putStrLn "finish computer and start human"
+--                                              res <- gameLoop newEdgeC newBoxC True newScoreC
+--                                              putStrLn "after gameloop call to human from computer"
+--                                              return res
+
+
+
+
+
 gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
 gameLoop eSet bList t aiScore = if Set.null eSet
                                 then return aiScore
                                 else if t
-                                     then do eId <- getHumanMove eSet
+                                     then do putStrLn "before human move ,eid"
+                                             eId <- getHumanMove eSet
+                                             putStrLn "in game move after human move"
                                              let nextEdgeH =  Edge eId False
                                              let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
-                                             gameLoop newEdgeH newBoxH False newScoreH
-                                     else do let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
-                                             let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
-                                             gameLoop newEdgeC newBoxC True newScoreC
+                                             putStrLn "finish human start computer"
+                                             resH <- gameLoop newEdgeH newBoxH False newScoreH
+                                             return resH
+                                     else do putStrLn "in game move before computer move"
+                                             putStrLn (printEdgeList (Set.toList eSet))
+                                             putStrLn "minimax"
+                                             let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+                                             putStrLn (show nextEdgeC)
+                                             putStrLn (printEdgeList (Set.toList eSet))
+                                             let newe = (Edge 1 False) 
+                                             let newE = Set.delete newe eSet
+                                             putStrLn "New Edge Set:"
+                                             putStrLn (printEdgeList (Set.toList newE))
+                                             -- putStrLn (show $ Set.member  eSet)
+                                             let (newEdgeC, newBoxC, newScoreC) = nextGameState (Edge 1 False) (eSet, bList) aiScore t
+                                             putStrLn "after nextGameState for computer"
+                                             putStrLn (printEdgeList (Set.toList newEdgeC))
+                                             putStrLn "finish computer and start human"
+                                            --  res <- gameLoop newEdgeC newBoxC True newScoreC
+                                             putStrLn "before human move ,eid"
+                                             eId <- getHumanMove newEdgeC
+                                             putStrLn "in game move after human move"
+                                             let nextEdgeH =  Edge eId False
+                                             let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (newEdgeC, newBoxC) newScoreC True
+                                             putStrLn "finish human start computer"
+                                             return 0
+                                            --  resH <- gameLoop newEdgeH newBoxH False newScoreH
+                                            --  return resH
 
 
+{-
+computerPlay :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
+computerPlay eSet bList aiScore = if Set.null eSet
+                                  then return aiScore
+                                  else do putStrLn "before computer move"
+                                          let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+                                          let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
+                                          putStrLn "finish computer and start human"
+                                          res <- gameLoop newEdgeC newBoxC newScoreC
+                                          return res
+-}
 
 {-
 cmpScore:
@@ -148,8 +213,8 @@ param2: (x1, x2, x3), s.t. x1 is the current set of available edges,
 Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
                            e2 is new list of remaining boxes,
                            e3 is the updated score
-
 -}
+ 
 gameAction :: Edge -> (Set.Set Edge, [Box]) -> (Set.Set Edge, [Box], Int)
 gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, scoreChanged)
   where applyAction (accl, newList) b = if (containEdge targetEdge (edges b)) && (boxFilled b)
@@ -160,12 +225,18 @@ gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, sc
         containEdge tar eList = any (==targetEdge) eList
         boxFilled box = all (\(Edge _ f) -> f) (filter (/= targetEdge) (edges box))
         (scoreChanged, newBoxList) = foldl applyAction (0,[]) bList
+        -- newEdgeSet = Set.delete targetEdge eSet
 
+{-
+gameAction :: Edge -> Set.Set Edge-> Set.Set Edge
+gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, scoreChanged)
 
+        -- newEdgeSet = Set.delete targetEdge eSet
+-}
 
 getHumanMove :: Set.Set Edge -> IO Int
 getHumanMove eSet = do putStrLn "Please make the next move."
-                       putStrLn $ "Available edges: " ++ (printEdgeList (Set.toList eSet))
+                       putStrLn $ "Available edges: " ++ (show (printEdgeList $ Set.toList eSet))
                        mv <- getLine
                        return $ read mv
 
@@ -177,7 +248,8 @@ minimax player (edgeset,boxlist, aiScore) edge
     | player == False                  = bestMove [minimax True x e | (x, e) <- expandedStates]
     | player == True                   = worstMove [minimax False x e | (x, e) <- expandedStates]
     where
-        expandedStates = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+        es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+        expandedStates = trace (show es) es
         terminal = Set.null edgeset
 
 
