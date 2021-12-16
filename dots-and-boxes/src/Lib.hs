@@ -91,11 +91,11 @@ initBox h = do line <- hGetLine h
 gameStart :: Set.Set Edge -> [Box] -> IO ()
 gameStart edgeSet boxList = if (Set.empty edgeSet || length boxList == 0)
                                then die $ "Error: starting the game because edge set or box list is empty."
-                               else do let res = gameLoop edgeSet boxSet False 0 0 
-                                       case res of
-                                         1  -> putStrLn "Human WIN!"
-                                         0  -> putStrLn "DRAW!"
-                                         -1 -> putStrLn "Computer WIN!"
+                               else do let res = gameLoop edgeSet boxSet False 0
+                                       case (res `compare` 0) of
+                                         LT -> putStrLn "Human WIN!"
+                                         EQ -> putStrLn "DRAW!"
+                                         GT -> putStrLn "Computer WIN!"
                                          _  -> die "Unexpected result returned from gameLoop."
 
 
@@ -113,16 +113,16 @@ Return: -1 = COMPUTER win
          1 = HUMAN win
 
 -}
-gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> Int -> Int
-gameLoop eSet bList t cPlayer hPlayer = if Set.empty eSet
-                                        then cmpScore cPlayer hPlayer
-                                        else if t  
-                                             then do let nextEdgeH =  Edge (read $ getHumanMove edgeSet) False
-                                                     let (newEdgeH, newBoxH, newScoreH) = gameAction nextEdgeH (eSet, bList, hPlayer)
-                                                     gameLoop newEdgeH newBoxH False cPlayer newScoreH
-                                             else do let nextEdgeC =  minimax eSet bList    -- TODO
-                                                     let (newEdgeC, newBoxC, newScoreC) = gameAction nextEdgeC (eSet, bList, cPlayer)
-                                                     gameLoop newEdgeC newBoxC True newScoreC hPlayer
+gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> Int
+gameLoop eSet bList t AIscore = if Set.empty eSet
+                                then AIscore
+                                else if t  
+                                     then do let nextEdgeH =  Edge (read $ getHumanMove edgeSet) False
+                                             let (newEdgeH, newBoxH, newScoreH) = gameAction nextEdgeH (eSet, bList, hPlayer)
+                                             gameLoop newEdgeH newBoxH False (AIscore - newScoreH)
+                                     else do let nextEdgeC =  minimax eSet bList AIscore   -- TODO
+                                             let (newEdgeC, newBoxC, newScoreC) = gameAction nextEdgeC (eSet, bList, cPlayer)
+                                             gameLoop newEdgeC newBoxC True (AIscore + newScoreC)
     
 
 
@@ -136,11 +136,12 @@ Return: -1 = COMPUTER win
          0 = Tie
          1 = HUMAN win
 
--}
 cmpScore :: Int a => a -> a -> a
 cmpScore cScore hScore | cScore > hScore = -1
                        | hScore > cScore =  1
                        | otherwise       =  0
+-}
+
 
 
 -- TODO: Ord for Edge based on identification?
@@ -157,8 +158,8 @@ Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
                            e3 is the updated score
 
 -}
-gameAction :: Edge -> (Set.Set Edge, [Box], Int) -> (Set.Set Edge, [Box], Int)
-gameAction targetEdge (eSet,bList,score) = (Set.delete targetEdge eSet, newBoxSet, score + scoreChanged)
+gameAction :: Edge -> (Set.Set Edge, [Box]) -> (Set.Set Edge, [Box], Int)
+gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxSet, scoreChanged)
   where applyAction (accl, newList) b = if (containEdge targetEdge b.edges) && (boxFilled b)
                                        then (accl + b.val, newList)
                                        else (accl, (newBox b) : newList)
