@@ -26,12 +26,6 @@ data Box = Box {
 } deriving Eq
 
 
-{- TODO: 
-instance Ord Edge where
-  (Edge v1 b1) `compare` (Edge v2 b2) | v1 > b2   = GT
-                                      | v2 > v1   = LT
-                                      | otherwise = b1 `compare` b2
--}
 instance Ord Edge where
   (Edge v1 _) `compare` (Edge v2 _) = v1 `compare` v2
 
@@ -39,6 +33,9 @@ instance Ord Edge where
 instance Show Edge where
   show (Edge x f) = "(Edge " ++ (show x) ++ " " ++ (show f) ++ ")"
   show _           = "Error: printing Edge obj."
+
+instance Eq Edge where
+  (Edge v1 _) == (Edge v2 _) = v1 == v2
 
 
 instance Show Box where
@@ -55,29 +52,16 @@ readConfig :: String -> (Set.Set Edge, [Box])
 readConfig fname = withFile fname ReadMode (\h -> initiateGameBoard h)
 
 
-{-
--- TODO: initiateGameBoard :: Handle -> IO ()
-initiateGameBoard :: (Set.Set Edge, [Box])
+initiateGameBoard :: Handle -> IO (Set.Set Edge, [Box])
 initiateGameBoard h = do res <- hIsEOF h 
                          if res
-                         then (Set.empty, [])
+                         then return (Set.empty, [])
                          else do (b, eList) <- initBox h
                                  let (eSet, bList) = initiateGameBoard h
                                  let newESet = foldl (\s e -> Set.insert e s) eSet eList
                                  return (newESet, b : bList)
--}
-initiateGameBoard :: Handle -> (Set.Set Edge, [Box])
-initiateGameBoard h = do res <- hIsEOF h 
-                         if res
-                         then (Set.empty, [])
-                         else (newESet, b : bList) 
-  where (b, eList) <- initBox h
-        (eSet, bList) = initiateGameBoard h
-        newESet = foldl (\s e -> Set.insert e s) eSet eList
-                                 
 
 
--- initBox :: Handle -> IO ()
 initBox :: Handle -> IO (Box, [Edge])
 initBox h = do line <- hGetLine h
                case (words line) of 
@@ -118,11 +102,11 @@ gameLoop eSet bList t AIscore = if Set.empty eSet
                                 then AIscore
                                 else if t  
                                      then do let nextEdgeH =  Edge (read $ getHumanMove edgeSet) False
-                                             let (newEdgeH, newBoxH, newScoreH) = gameAction nextEdgeH (eSet, bList, hPlayer)
-                                             gameLoop newEdgeH newBoxH False (AIscore - newScoreH)
-                                     else do let nextEdgeC =  minimax eSet bList AIscore   -- TODO
-                                             let (newEdgeC, newBoxC, newScoreC) = gameAction nextEdgeC (eSet, bList, cPlayer)
-                                             gameLoop newEdgeC newBoxC True (AIscore + newScoreC)
+                                             let (newEdgeH, newBoxH, newScoreH) <- nextGameState nextEdgeH (eSet, eList) AIscore t
+                                             gameLoop newEdgeH newBoxH False newScoreH
+                                     else do let nextEdgeC =  minimax False (eSet, bList, AIscore) (Edge 0 False) 
+                                             let (newEdgeC, newBoxC, newScoreC) <- nextGameState nextEdgeC (eSet, eList) AIscore t
+                                             gameLoop newEdgeC newBoxC True newScoreC
     
 
 
@@ -143,8 +127,13 @@ cmpScore cScore hScore | cScore > hScore = -1
 -}
 
 
+nextGameState :: Edge -> (Set.Set Edge, [Box]) -> Int -> Bool -> IO (Set.Set Edge, [Box], Int)
+nextGameState e (eSet, bList) score player = if player 
+                                             then return (newS, newL, score - sUpdate)
+                                             else return (newS, newL, score + sUpdate)
+                                             where (newS, newL, sUpdate) = gameAction e (eSet, bList)
 
--- TODO: Ord for Edge based on identification?
+
 {-
 gameAction:
 
