@@ -11,11 +11,14 @@ import System.IO(Handle, hGetLine, hIsEOF, withFile, IOMode(ReadMode))
 import System.Exit(die)
 import Control.Monad
 import Debug.Trace
+-- import Control.Parallel.Strategies
 
 
 someFunc :: String -> IO ()
 someFunc config_file = do (eSet, bList) <- readConfig config_file
+                          depth <- getDepth
                           putStrLn (printEdgeList (Set.toList eSet))
+                          writeFile "testfile.txt" $ show "minimax result"
                           putStrLn "before game starts"
                           gameStart eSet bList
 
@@ -74,6 +77,11 @@ initBox h = do line <- hGetLine h
                                              let box = Box edgeL (read v)
                                              return (box, edgeL)
                  _ -> die $ "Board Configuration Read Error."
+
+getDepth :: IO Int
+getDepth = do putStrLn "Enter a depth: "
+              depth <- getLine
+              return (read depth)
 
 
 -- note: computer makes the first move
@@ -142,13 +150,18 @@ gameLoop eSet bList t aiScore = if Set.null eSet
                                      else do putStrLn "in game move before computer move"
                                              putStrLn (printEdgeList (Set.toList eSet))
                                              putStrLn "minimax"
-                                             let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+                                             let (bestscore, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
                                              putStrLn (show nextEdgeC)
+                                             putStrLn (show bestscore)
+
+                                            --  let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+                                            --  putStrLn (show nextEdgeC)
+                                             putStrLn "finished minimax"
                                              putStrLn (printEdgeList (Set.toList eSet))
-                                             let newe = (Edge 1 False) 
-                                             let newE = Set.delete newe eSet
-                                             putStrLn "New Edge Set:"
-                                             putStrLn (printEdgeList (Set.toList newE))
+                                            --  let newe = (Edge 1 False) 
+                                            --  let newE = Set.delete newe eSet
+                                            --  putStrLn "New Edge Set:"
+                                            --  putStrLn (printEdgeList (Set.toList newE))
                                              -- putStrLn (show $ Set.member  eSet)
                                              let (newEdgeC, newBoxC, newScoreC) = nextGameState (Edge 1 False) (eSet, bList) aiScore t
                                              putStrLn "after nextGameState for computer"
@@ -202,6 +215,8 @@ nextGameState e (eSet, bList) score player = if player
                                              where (newS, newL, sUpdate) = gameAction e (eSet, bList)
 
 
+
+
 {-
 gameAction:
 
@@ -217,9 +232,11 @@ Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
  
 gameAction :: Edge -> (Set.Set Edge, [Box]) -> (Set.Set Edge, [Box], Int)
 gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, scoreChanged)
-  where applyAction (accl, newList) b = if (containEdge targetEdge (edges b)) && (boxFilled b)
-                                       then (accl + (val b), newList)
-                                       else (accl, (newBox b) : newList)
+  where applyAction (accl, newList) b = if not (containEdge targetEdge (edges b))
+                                       then (accl, b:newList)
+                                       else if (containEdge targetEdge (edges b)) && (boxFilled b)
+                                            then (accl + (val b), newList)
+                                            else (accl, (newBox b) : newList)
         newBox box = Box (newEdgeList (edges box)) (val box)
         newEdgeList oldList = (Edge (eid targetEdge) True) : (filter (/=targetEdge) oldList)
         containEdge tar eList = any (==targetEdge) eList
@@ -239,6 +256,55 @@ getHumanMove eSet = do putStrLn "Please make the next move."
                        putStrLn $ "Available edges: " ++ (show (printEdgeList $ Set.toList eSet))
                        mv <- getLine
                        return $ read mv
+
+------------------------------------------------------------------------------------------------
+
+
+
+
+
+minimax player (edgeset,boxlist, aiScore) edge
+    | terminal                 = (3, edge)
+    | player == False                          =  bestMove [minimax True x e | (x, e) <- (head expandedStates):[]]
+    | player == True                           =  worstMove [minimax False x e | (x, e) <- (head expandedStates):[]]
+    where
+        es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+
+-- -- minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
+-- minimax player depth (edgeset,boxlist, aiScore) edge
+--     | terminal || depth == 0                   = (3, edge)
+--     | player == False                          =  bestMove [minimax True ed x e | (x, e) <- (head expandedStates):[]]
+--     | player == True                           =  worstMove [minimax False ed x e | (x, e) <- (head expandedStates):[]]
+--     where
+--         es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+
+        -- ((newedgeLsit,_,_), ne) = head expandedStates
+
+
+        expandedStates = trace (show es) es
+
+        line = "----------------------------------------------------------------------------------------------"
+        -- newdepth = trace ( (show ed) ++ line) ed
+        terminal = Set.null edgeset
+
+appendText x = appendFile "testfile.txt" x
+
+
+
+-- minimax player  (edgeset,boxlist, aiScore) edge
+--     | terminal                     = (aiScore, edge)
+--     | player == False                          = bestMove [minimax True x e | (x, e) <- expandedStates]
+--     | player == True                           = worstMove [minimax False x e | (x, e) <- expandedStates]
+--     where
+--         es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+
+--         -- ((newedgeLsit,_,_), ne) = head expandedStates
+--         expandedStates = trace (show es) es
+--         -- newdepth = trace (show ed) ed
+--         terminal = Set.null edgeset
+
+
+
 
 
 
