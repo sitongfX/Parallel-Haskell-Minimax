@@ -11,14 +11,17 @@ import System.IO(Handle, hGetLine, hIsEOF, withFile, IOMode(ReadMode))
 import System.Exit(die)
 import Control.Monad
 import Debug.Trace
+import qualified Data.Map.Strict as Map
+import Foreign.C.String (castCharToCSChar)
+
 -- import Control.Parallel.Strategies
 
 
 someFunc :: String -> IO ()
 someFunc config_file = do (eSet, bList) <- readConfig config_file
-                          depth <- getDepth
+                        --   depth <- getDepth
                           putStrLn (printEdgeList (Set.toList eSet))
-                          writeFile "testfile.txt" $ show "minimax result"
+                        --   writeFile "testfile.txt" $ show "minimax result"
                           putStrLn "before game starts"
                           gameStart eSet bList
 
@@ -111,6 +114,56 @@ Return: -1 = COMPUTER win
          1 = HUMAN win
 
 -}
+gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
+gameLoop eSet bList t aiScore = if Set.null eSet
+                                then return aiScore
+                                else if t
+                                     then do putStrLn "before human move"
+                                             eId <- getHumanMove eSet
+                                             let nextEdgeH =  Edge eId False
+                                             let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
+                                             putStrLn "finish human start computer"
+                                             putStrLn $ "score" ++ (show newScoreH)
+                                             resH <- gameLoop newEdgeH newBoxH False newScoreH
+                                             return resH
+                                     else do putStrLn "AI move"
+                                             let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+                                             let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
+                                             putStrLn $ "score" ++ (show newScoreC)
+                                             res <- gameLoop newEdgeC newBoxC True newScoreC
+                                             return res
+
+
+
+-- gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
+-- gameLoop eSet bList t aiScore = if Set.null eSet
+--                                 then return aiScore
+                                -- else if t
+                                --      then do putStrLn "human move"
+                                --              putStrLn "print boxlist"
+                                --              mapM_ print bList
+                                --              eId <- getHumanMove eSet
+                                --              let nextEdgeH =  Edge eId False
+                                --              let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
+                                --              putStrLn $ "score" ++ (show newScoreH)
+                                --              resH <- gameLoop newEdgeH newBoxH False newScoreH
+                                --              return resH
+                                --      else do putStrLn "computer move"
+                                --              putStrLn "print boxlist"
+                                --              mapM_ print bList
+                                --              eId <- getHumanMove eSet
+                                --              let nextEdgeH =  Edge eId False
+                                --              let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
+                                --              putStrLn $ "score" ++ (show newScoreH)
+                                --              resH <- gameLoop newEdgeH newBoxH True newScoreH
+                                --              return resH
+
+
+
+
+
+
+
 -- gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
 -- gameLoop eSet bList t aiScore = if Set.null eSet
 --                                 then return aiScore
@@ -124,57 +177,33 @@ Return: -1 = COMPUTER win
 --                                              resH <- gameLoop newEdgeH newBoxH False newScoreH
 --                                              return resH
 --                                      else do putStrLn "in game move before computer move"
---                                              let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
---                                              let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
---                                              putStrLn "finish computer and start human"
---                                              res <- gameLoop newEdgeC newBoxC True newScoreC
---                                              putStrLn "after gameloop call to human from computer"
---                                              return res
+--                                              putStrLn (printEdgeList (Set.toList eSet))
+--                                              putStrLn "minimax"
+--                                              let (bestscore, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+--                                         --      putStrLn (show nextEdgeC)
+--                                         --      putStrLn (show bestscore)
 
-
-
-
-
-gameLoop :: Set.Set Edge -> [Box] -> Bool -> Int -> IO Int
-gameLoop eSet bList t aiScore = if Set.null eSet
-                                then return aiScore
-                                else if t
-                                     then do putStrLn "before human move ,eid"
-                                             eId <- getHumanMove eSet
-                                             putStrLn "in game move after human move"
-                                             let nextEdgeH =  Edge eId False
-                                             let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
-                                             putStrLn "finish human start computer"
-                                             resH <- gameLoop newEdgeH newBoxH False newScoreH
-                                             return resH
-                                     else do putStrLn "in game move before computer move"
-                                             putStrLn (printEdgeList (Set.toList eSet))
-                                             putStrLn "minimax"
-                                             let (bestscore, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
-                                             putStrLn (show nextEdgeC)
-                                             putStrLn (show bestscore)
-
-                                            --  let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
-                                            --  putStrLn (show nextEdgeC)
-                                             putStrLn "finished minimax"
-                                             putStrLn (printEdgeList (Set.toList eSet))
-                                            --  let newe = (Edge 1 False) 
-                                            --  let newE = Set.delete newe eSet
-                                            --  putStrLn "New Edge Set:"
-                                            --  putStrLn (printEdgeList (Set.toList newE))
-                                             -- putStrLn (show $ Set.member  eSet)
-                                             let (newEdgeC, newBoxC, newScoreC) = nextGameState (Edge 1 False) (eSet, bList) aiScore t
-                                             putStrLn "after nextGameState for computer"
-                                             putStrLn (printEdgeList (Set.toList newEdgeC))
-                                             putStrLn "finish computer and start human"
-                                            --  res <- gameLoop newEdgeC newBoxC True newScoreC
-                                             putStrLn "before human move ,eid"
-                                             eId <- getHumanMove newEdgeC
-                                             putStrLn "in game move after human move"
-                                             let nextEdgeH =  Edge eId False
-                                             let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (newEdgeC, newBoxC) newScoreC True
-                                             putStrLn "finish human start computer"
-                                             return 0
+--                                             --  let (_, nextEdgeC) =  minimax False (eSet, bList, aiScore) (Edge 0 False)
+--                                             --  putStrLn (show nextEdgeC)
+--                                         --      putStrLn "finished minimax"
+--                                         --      putStrLn (printEdgeList (Set.toList eSet))
+--                                             --  let newe = (Edge 1 False) 
+--                                             --  let newE = Set.delete newe eSet
+--                                             --  putStrLn "New Edge Set:"
+--                                             --  putStrLn (printEdgeList (Set.toList newE))
+--                                              -- putStrLn (show $ Set.member  eSet)
+--                                         --      let (newEdgeC, newBoxC, newScoreC) = nextGameState (Edge 1 False) (eSet, bList) aiScore t
+--                                         --      putStrLn "after nextGameState for computer"
+--                                         --      putStrLn (printEdgeList (Set.toList newEdgeC))
+--                                         --      putStrLn "finish computer and start human"
+--                                             --  res <- gameLoop newEdgeC newBoxC True newScoreC
+--                                         --      putStrLn "before human move ,eid"
+--                                         --      eId <- getHumanMove newEdgeC
+--                                         --      putStrLn "in game move after human move"
+--                                         --      let nextEdgeH =  Edge eId False
+--                                         --      let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (newEdgeC, newBoxC) newScoreC True
+--                                         --      putStrLn "finish human start computer"
+--                                              return bestscore
                                             --  resH <- gameLoop newEdgeH newBoxH False newScoreH
                                             --  return resH
 
@@ -229,7 +258,7 @@ Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
                            e2 is new list of remaining boxes,
                            e3 is the updated score
 -}
- 
+
 gameAction :: Edge -> (Set.Set Edge, [Box]) -> (Set.Set Edge, [Box], Int)
 gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, scoreChanged)
   where applyAction (accl, newList) b = if not (containEdge targetEdge (edges b))
@@ -241,7 +270,8 @@ gameAction targetEdge (eSet,bList) = (Set.delete targetEdge eSet, newBoxList, sc
         newEdgeList oldList = (Edge (eid targetEdge) True) : (filter (/=targetEdge) oldList)
         containEdge tar eList = any (==targetEdge) eList
         boxFilled box = all (\(Edge _ f) -> f) (filter (/= targetEdge) (edges box))
-        (scoreChanged, newBoxList) = foldl applyAction (0,[]) bList
+        (sx, er) = foldl applyAction (0,[]) bList
+        (scoreChanged, newBoxList) = (trace (show sx) sx, er)
         -- newEdgeSet = Set.delete targetEdge eSet
 
 {-
@@ -263,62 +293,95 @@ getHumanMove eSet = do putStrLn "Please make the next move."
 
 
 
-minimax player (edgeset,boxlist, aiScore) edge
-    | terminal                 = (3, edge)
-    | player == False                          =  bestMove [minimax True x e | (x, e) <- (head expandedStates):[]]
-    | player == True                           =  worstMove [minimax False x e | (x, e) <- (head expandedStates):[]]
-    where
-        es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
-
--- -- minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
--- minimax player depth (edgeset,boxlist, aiScore) edge
---     | terminal || depth == 0                   = (3, edge)
---     | player == False                          =  bestMove [minimax True ed x e | (x, e) <- (head expandedStates):[]]
---     | player == True                           =  worstMove [minimax False ed x e | (x, e) <- (head expandedStates):[]]
+-- minimax player (edgeset,boxlist, aiScore) edge
+--     | terminal                 = (3, edge)
+--     | player == False                          =  bestMove [minimax True x e | (x, e) <- (head expandedStates):[]]
+--     | player == True                           =  worstMove [minimax False x e | (x, e) <- (head expandedStates):[]]
 --     where
 --         es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
 
-        -- ((newedgeLsit,_,_), ne) = head expandedStates
+-- minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
+-- minimax player depth (edgeset,boxlist, aiScore) edge
+--     | terminal || depth == 0                   = (aiScore, edge)
+--     | player == False                          =  bestMove [minimax True newdepth x e | (x, e) <- expandedStates]
+--     | player == True                           =  worstMove [minimax False newdepth x e | (x, e) <-  expandedStates]
+--     where
+--         es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+
+--         expandedStates = trace (show es) es
+--         ed = depth - 1
+--         newdepth = trace ((show ed)) ed
+--         terminal = Set.null edgeset
+
+-- appendText x = appendFile "testfile.txt" x
 
 
-        expandedStates = trace (show es) es
-
-        line = "----------------------------------------------------------------------------------------------"
-        -- newdepth = trace ( (show ed) ++ line) ed
-        terminal = Set.null edgeset
-
-appendText x = appendFile "testfile.txt" x
 
 
+-- cached version
 
--- minimax player  (edgeset,boxlist, aiScore) edge
+-- terminal            -> reached leaf node
+-- player == False     -> ai's turn or max node
+-- player == True      -> human's turn or min node
+
+-- list[[value,edge],[edgeset,edgeset,edgeset]]
+
+
+-- minimax player (edgeset, boxlist, aiScore) edge cacheMap
+--     | terminal                                 =  (aiScore, edge)
+--     | player == False                          =  if cached then cachedMove else MaxMove
+--     | player == True                           =  if cached then cachedMove else MinMove
+--     where
+--         expandedStates = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+--         MaxMove = bestMove [minimax True x e cacheMap | (x, e) <- expandedStates]          (bestMove)
+--         MinMove = worstMove [minimax False x e maxCacheMap | (x, e) <-  expandedStates]  ??????  先check 有没有edgeset 没的话就call MINIMAX xxx 然后再加上edgeset？？cachmap
+--         maxCacheMap = Map.insert edgeset MaxMove cacheMap                                ？？ 但给哪里传Maxcachemap这个parameter
+--         minCasheMap = Map.insert edgeset MinMove cacheMap                        
+--         cached = Map.member edgeset cacheMap
+--         cachedMove = getCachedState edgeset cacheMap
+--         terminal = Set.null edgeset
+
+
+-- use if edgeset exists in cacheMap
+-- getCachedState edgeset cacheMap = do
+--      move <- Map.lookup edgeset cacheMap
+--      return move
+
+
+-- depth-limited version
+
+-- minimax player depth (edgeset,boxlist, aiScore) edge
 --     | terminal                     = (aiScore, edge)
---     | player == False                          = bestMove [minimax True x e | (x, e) <- expandedStates]
---     | player == True                           = worstMove [minimax False x e | (x, e) <- expandedStates]
+--     | player == False                          = bestMove [minimax True (depth-1) x e | (x, e) <- expandedStates]
+--     | player == True                           = worstMove [minimax False (depth-1) x e | (x, e) <- expandedStates]
 --     where
 --         es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
 
 --         -- ((newedgeLsit,_,_), ne) = head expandedStates
 --         expandedStates = trace (show es) es
+
 --         -- newdepth = trace (show ed) ed
 --         terminal = Set.null edgeset
 
 
 
 
-
+-- original version
 
 minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 minimax player (edgeset,boxlist, aiScore) edge
-    | terminal                         = (aiScore, edge)
-    | player == False                  = bestMove [minimax True x e | (x, e) <- expandedStates]
-    | player == True                   = worstMove [minimax False x e | (x, e) <- expandedStates]
+    | edge ==  (Edge 0 False)    = bestMove showbs1
+    | terminal                    = (aiScore, edge)
+    | not player                  = bestMove [minimax True x e | (x, e) <- expandedStates2]
+    | player                      = worstMove [minimax False x e | (x, e) <- expandedStates2]
     where
-        es = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
-        expandedStates = trace (show es) es
+        expandedStates  = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+        expandedStates2 = [ (nextGameState e (edgeset, boxlist) aiScore player, edge) | e <- Set.toList edgeset]
+        -- bs = [minimax True x e | (x, e) <- expandedStates2]
+        bs1 = [minimax True x e | (x, e) <- expandedStates] 
+        showbs1 = trace ("---------" ++show bs1) bs1
+        -- showbs = trace ("---------/n" ++show bs) bs
         terminal = Set.null edgeset
-
-
 
 bestMove :: [(Int, Edge)] -> (Int, Edge)
 bestMove [(score, edge)]       = (score, edge)
