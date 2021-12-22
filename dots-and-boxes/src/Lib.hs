@@ -248,22 +248,22 @@ minimaxAlgoPar (player, (edgeset, boxlist, aiScore), edge)
   | player                = worstMove parResultSubMin
   | otherwise             = error "invalid game state"
   where
-    parResultInitMax :: [(Int, Edge)]
-    parResultInitMax = parMap rpar minimaxAlgoPar paramListInitMax
+--     parResultInitMax :: [(Int, Edge)]
+    parResultInitMax = map minimaxAlgoPar paramListInitMax `using` parList rseq
 
-    parResultSubMax :: [(Int, Edge)]
-    parResultSubMax = parMap rpar minimaxAlgoPar paramListSubMax
+--     parResultSubMax :: [(Int, Edge)]
+    parResultSubMax = map minimaxAlgoPar paramListSubMax `using` parList rseq
 
-    parResultSubMin :: [(Int, Edge)]
-    parResultSubMin = parMap rpar minimaxAlgoPar paramListSubMax
+--     parResultSubMin :: [(Int, Edge)]
+    parResultSubMin = map minimaxAlgoPar paramListSubMax `using` parList rseq
 
-    paramListInitMax :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
+--     paramListInitMax :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
     paramListInitMax = [ (True, x, e) | (x, e) <- initExpandedStates]
 
-    paramListSubMax :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
+--     paramListSubMax :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
     paramListSubMax = [ (True, x, e) | (x, e) <- subExpandedStates]
 
-    paramListSubMin :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
+--     paramListSubMin :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
     paramListSubMin = [ (False, x, e) | (x, e) <- subExpandedStates]
 
     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
