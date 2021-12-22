@@ -368,31 +368,47 @@ getHumanMove eSet = do putStrLn "Please make the next move."
 
 -- original version
 
+-- minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
+-- minimax player (edgeset,boxlist, aiScore) edge
+--     | edge ==  (Edge 0 False)    = bestMove showbs1
+--     | terminal                    = (aiScore, edge)
+--     | not player                  = bestMove [minimax True x e | (x, e) <- expandedStates2]
+--     | player                      = worstMove [minimax False x e | (x, e) <- expandedStates2]
+--     where
+--         expandedStates  = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
+--         expandedStates2 = [ (nextGameState e (edgeset, boxlist) aiScore player, edge) | e <- Set.toList edgeset]
+--         -- bs = [minimax True x e | (x, e) <- expandedStates2]
+--         bs1 = [minimax True x e | (x, e) <- expandedStates] 
+--         showbs1 = trace ("---------" ++show bs1) bs1
+--         -- showbs = trace ("---------/n" ++show bs) bs
+--         terminal = Set.null edgeset
+
+
+
 minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 minimax player (edgeset,boxlist, aiScore) edge
-    | edge ==  (Edge 0 False)    = bestMove showbs1
-    | terminal                    = (aiScore, edge)
-    | not player                  = bestMove [minimax True x e | (x, e) <- expandedStates2]
-    | player                      = worstMove [minimax False x e | (x, e) <- expandedStates2]
+    | edge == Edge 0 False       = bestMove [minimax True x e | (x, e) <- initExpandedStates]
+    | terminal                   = (aiScore, edge)
+    | not player                 = bestMove [minimax True x e | (x, e) <- subExpandedStates]
+    | player                     = worstMove [minimax False x e | (x, e) <- subExpandedStates]
+    | otherwise                  = error "invalid game state"
     where
-        expandedStates  = [ (nextGameState e (edgeset, boxlist) aiScore player, e) | e <- Set.toList edgeset]
-        expandedStates2 = [ (nextGameState e (edgeset, boxlist) aiScore player, edge) | e <- Set.toList edgeset]
-        -- bs = [minimax True x e | (x, e) <- expandedStates2]
-        bs1 = [minimax True x e | (x, e) <- expandedStates] 
-        showbs1 = trace ("---------" ++show bs1) bs1
-        -- showbs = trace ("---------/n" ++show bs) bs
+        initExpandedStates = [ (getNextGameState e, e) | e <- edgelist]
+        subExpandedStates = [ (getNextGameState e, edge) | e <- edgelist]
+        getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
+        edgelist = Set.toList edgeset
         terminal = Set.null edgeset
+
 
 bestMove :: [(Int, Edge)] -> (Int, Edge)
 bestMove [(score, edge)]       = (score, edge)
 bestMove ((score, edge):(score', edge'):xs) = bestMove (if score >= score' then (score, edge):xs else (score', edge'):xs)
-bestMove _  = error "fine"
-
+bestMove _  = error "not a valid move"
 
 worstMove :: [(Int, Edge)] -> (Int, Edge)
 worstMove [(score, edge)]       = (score, edge)
 worstMove ((score, edge):(score', edge'):xs) = worstMove (if score <= score' then (score, edge):xs else (score', edge'):xs)
-worstMove _  = error "fine"
+worstMove _  = error "not a valid move"
 
 
 
