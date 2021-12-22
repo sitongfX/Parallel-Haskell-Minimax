@@ -1,9 +1,8 @@
 module Lib
-  ( someFunc,
+  ( gameFunc,
   )
 where
 
-import Control.Monad ()
 import Control.Parallel.Strategies (parList, rseq, using)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -12,20 +11,20 @@ import Foreign.C.String (castCharToCSChar)
 import System.Exit (die)
 import System.IO (Handle, IOMode (ReadMode), hGetLine, hIsEOF, withFile)
 
-someFunc :: String -> String -> IO ()
-someFunc config_file mode = do
+gameFunc :: String -> String -> IO ()
+gameFunc config_file mode = do
   (eSet, bList) <- readConfig config_file
   case mode of
     "algo-seq" -> do
       putStrLn "Running SEQUENTIAL minimax algorithm with tree depth = 9"
       let (score, edge) = minimaxDepLim False 9 (eSet, bList, 0) (Edge 0 False)
-      putStrLn $ "algorithm suggested: " ++ (show edge)
+      putStrLn $ "algorithm suggested: " ++ show edge
       return ()
     "algo-par" -> do
       let pDepth = 1
-      putStrLn $ "Running PARALLEL minimax algorithm with tree depth = 9 and parallel depth = " ++ (show pDepth)
-      let (score, edge) = minimaxParDep (False, pDepth, 9, (eSet, bList, 0), (Edge 0 False))
-      putStrLn $ "algorithm suggested: " ++ (show edge)
+      putStrLn $ "Running PARALLEL minimax algorithm with tree depth = 9 and parallel depth = " ++ show pDepth
+      let (score, edge) = minimaxParDep (False, pDepth, 9, (eSet, bList, 0), Edge 0 False)
+      putStrLn $ "algorithm suggested: " ++ show edge
       return ()
     "game-seq" -> do
       putStrLn "Playing game with SEQUENTIAL minimax algorithm"
@@ -33,7 +32,7 @@ someFunc config_file mode = do
       putStrLn "Game Board: "
       mapM_ print bList
       putStrLn "Available edges :"
-      putStrLn $ "" ++ (printEdgeList (Set.toList eSet))
+      putStrLn $ "" ++ printEdgeList (Set.toList eSet)
       putStrLn "SEQUENTIAL Game is starting..."
       gameStartSeq eSet bList depth
     "game-par" -> do
@@ -41,7 +40,7 @@ someFunc config_file mode = do
       putStrLn "Game Board: "
       mapM_ print bList
       putStrLn "Available edges :"
-      putStrLn $ "" ++ (printEdgeList (Set.toList eSet))
+      putStrLn $ "" ++ printEdgeList (Set.toList eSet)
       depth <- getAlgoDepth
       pDepth <- getParDepth
       putStrLn (printEdgeList (Set.toList eSet))
@@ -63,24 +62,20 @@ instance Ord Edge where
   (Edge v1 _) `compare` (Edge v2 _) = v1 `compare` v2
 
 instance Show Edge where
-  show (Edge x f) = "(Edge " ++ (show x) ++ " " ++ (show f) ++ ")"
-
--- show _ = "Error: printing Edge obj."
+  show (Edge x f) = "(Edge " ++ show x ++ " " ++ show f ++ ")"
 
 instance Eq Edge where
   (Edge v1 _) == (Edge v2 _) = v1 == v2
 
 instance Show Box where
-  show (Box l v) = "Box " ++ (printEdgeList l) ++ " " ++ (show v)
-
--- show _ = "Error: printing Box obj."
+  show (Box l v) = "Box " ++ printEdgeList l ++ " " ++ show v
 
 printEdgeList :: [Edge] -> String
 printEdgeList [] = []
 printEdgeList (x : xs) = show x ++ " " ++ printEdgeList xs
 
 readConfig :: String -> IO (Set.Set Edge, [Box])
-readConfig fname = withFile fname ReadMode (\h -> initiateGameBoard h)
+readConfig fname = withFile fname ReadMode initiateGameBoard
 
 initiateGameBoard :: Handle -> IO (Set.Set Edge, [Box])
 initiateGameBoard h = do
@@ -90,43 +85,36 @@ initiateGameBoard h = do
     else do
       (b, eList) <- initBox h
       (eSet, bList) <- initiateGameBoard h
-      let newESet = foldl (\s e -> Set.insert e s) eSet eList
+      let newESet = foldl (flip Set.insert) eSet eList
       return (newESet, b : bList)
 
 initBox :: Handle -> IO (Box, [Edge])
 initBox h = do
   line <- hGetLine h
-  case (words line) of
+  case words line of
     l@[v, e1, e2, e3, e4] -> do
-      let edgeL = foldl (\acc x -> (Edge (read x) False) : acc) [] (tail l)
+      let edgeL = foldl (\acc x -> Edge (read x) False : acc) [] (tail l)
       let box = Box edgeL (read v)
       return (box, edgeL)
-    _ -> die $ "Board Configuration Read Error."
+    _ -> die "Board Configuration Read Error."
 
 getAlgoDepth :: IO Int
 getAlgoDepth = do
-  putStrLn "Enter a depth for the AI search tree: "
-  depth <- getLine
-  return (read depth)
+  putStrLn "Enter a depth for the AI search tree "
+  putStrLn "(if running on 2x2 board, enter depth < 9 for speed up): "
+  read <$> getLine
 
 getParDepth :: IO Int
 getParDepth = do
   putStrLn "Enter a depth for parallelism: "
-  depth <- getLine
-  return (read depth)
+  read <$> getLine
 
--- getBehavior :: IO String
--- getBehavior = do
---   putStrLn "Enter 'game' for game-playing mode."
---   putStrLn "Enter 'algo' for algorithm-testing mode."
---   mode <- getLine
---   return mode
 
 -- note: computer makes the first move
 gameStartSeq :: Set.Set Edge -> [Box] -> Int -> IO ()
 gameStartSeq edgeSet boxList depth =
-  if (Set.null edgeSet || length boxList == 0)
-    then die $ "Error: starting the game because edge set or box list is empty."
+  if Set.null edgeSet || null boxList
+    then die "Error: starting the game because edge set or box list is empty."
     else do
       -- putStrLn "inside game starts, before game loop"
       res <- gameLoopSeq edgeSet boxList False 0 depth
@@ -138,8 +126,8 @@ gameStartSeq edgeSet boxList depth =
 -- note: computer makes the first move
 gameStartPar :: Set.Set Edge -> [Box] -> Int -> Int -> IO ()
 gameStartPar edgeSet boxList depth pDepth =
-  if (Set.null edgeSet || length boxList == 0)
-    then die $ "Error: starting the game because edge set or box list is empty."
+  if Set.null edgeSet || null boxList
+    then die "Error: starting the game because edge set or box list is empty."
     else do
       -- putStrLn "inside game starts, before game loop"
       res <- gameLoopPar edgeSet boxList False 0 depth pDepth
@@ -163,50 +151,48 @@ Return: -1 = COMPUTER win
 
 -}
 gameLoopSeq :: Set.Set Edge -> [Box] -> Bool -> Int -> Int -> IO Int
-gameLoopSeq eSet bList t aiScore depth =
-  if Set.null eSet
-    then return aiScore
-    else
-      if t
-        then do
-          putStrLn "HUMAN move:"
-          eId <- getHumanMove eSet
-          let nextEdgeH = Edge eId False
-          let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
-          -- putStrLn "finish human start computer"
-          putStrLn $ "Score after human move: " ++ (show newScoreH)
-          resH <- gameLoopSeq newEdgeH newBoxH False newScoreH depth
-          return resH
-        else do
-          putStrLn "AI move:"
-          let (_, nextEdgeC) = minimaxDepLim False depth (eSet, bList, aiScore) (Edge 0 False)
-          let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
-          putStrLn $ "Score after AI move: " ++ (show newScoreC)
-          res <- gameLoopSeq newEdgeC newBoxC True newScoreC depth
-          return res
+gameLoopSeq eSet bList t aiScore depth
+  | Set.null eSet = return aiScore
+  | t = do
+    putStrLn "HUMAN move:"
+    putStrLn "Available box list: "
+    mapM_ print bList
+    eId <- getHumanMove eSet
+    let nextEdgeH = Edge eId False
+    let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
+    putStrLn $ "Score after human move: " ++ show newScoreH
+    putStrLn "-----------------------------------------------"
+    gameLoopSeq newEdgeH newBoxH False newScoreH depth
+  | otherwise = do
+    putStrLn "AI move:"
+    let (_, nextEdgeC) = minimaxDepLim False depth (eSet, bList, aiScore) (Edge 0 False)
+    putStrLn $ "AI chose:" ++ show nextEdgeC
+    let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
+    putStrLn $ "Score after AI move: " ++ show newScoreC
+    putStrLn "-----------------------------------------------"
+    gameLoopSeq newEdgeC newBoxC True newScoreC depth
 
 gameLoopPar :: Set.Set Edge -> [Box] -> Bool -> Int -> Int -> Int -> IO Int
-gameLoopPar eSet bList t aiScore depth pDepth =
-  if Set.null eSet
-    then return aiScore
-    else
-      if t
-        then do
-          putStrLn "HUMAN move:"
-          eId <- getHumanMove eSet
-          let nextEdgeH = Edge eId False
-          let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
-          -- putStrLn "finish human start computer"
-          putStrLn $ "Score after human move: " ++ (show newScoreH)
-          resH <- gameLoopSeq newEdgeH newBoxH False newScoreH depth
-          return resH
-        else do
-          putStrLn "AI move:"
-          let (_, nextEdgeC) = minimaxParDep (False, pDepth, depth, (eSet, bList, aiScore), (Edge 0 False))
-          let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
-          putStrLn $ "Score after AI move: " ++ (show newScoreC)
-          res <- gameLoopSeq newEdgeC newBoxC True newScoreC depth
-          return res
+gameLoopPar eSet bList t aiScore depth pDepth
+  | Set.null eSet = return aiScore
+  | t = do
+    putStrLn "HUMAN move:"
+    putStrLn "Available box list: "
+    mapM_ print bList
+    eId <- getHumanMove eSet
+    let nextEdgeH = Edge eId False
+    let (newEdgeH, newBoxH, newScoreH) = nextGameState nextEdgeH (eSet, bList) aiScore t
+    putStrLn $ "Score after human move: " ++ show newScoreH
+    putStrLn "-----------------------------------------------"
+    gameLoopSeq newEdgeH newBoxH False newScoreH depth
+  | otherwise = do
+    putStrLn "AI move:"
+    let (_, nextEdgeC) = minimaxParDep (False, pDepth, depth, (eSet, bList, aiScore), Edge 0 False)
+    putStrLn $ "AI chose:" ++ show nextEdgeC
+    let (newEdgeC, newBoxC, newScoreC) = nextGameState nextEdgeC (eSet, bList) aiScore t
+    putStrLn $ "Score after AI move: " ++ show newScoreC
+    putStrLn "-----------------------------------------------"
+    gameLoopSeq newEdgeC newBoxC True newScoreC depth
 
 {-
 cmpScore:
@@ -248,47 +234,45 @@ Return: (e1, e2, e3), s.t. e1 is new set of remaining edges,
 gameAction :: Edge -> (Set.Set Edge, [Box]) -> (Set.Set Edge, [Box], Int)
 gameAction targetEdge (eSet, bList) = (Set.delete targetEdge eSet, newBoxList, scoreChanged)
   where
-    applyAction (accl, newList) b =
-      if not (containEdge targetEdge (edges b))
-        then (accl, b : newList)
-        else
-          if (containEdge targetEdge (edges b)) && (boxFilled b)
-            then (accl + (val b), newList)
-            else (accl, (newBox b) : newList)
+    applyAction (accl, newList) b
+      | not (containEdge targetEdge (edges b)) = (accl, b : newList)
+      | containEdge targetEdge (edges b) && boxFilled b = (accl + val b, newList)
+      | otherwise = (accl, newBox b : newList)
     newBox box = Box (newEdgeList (edges box)) (val box)
-    newEdgeList oldList = (Edge (eid targetEdge) True) : (filter (/= targetEdge) oldList)
-    containEdge tar eList = any (== targetEdge) eList
+    newEdgeList oldList = Edge (eid targetEdge) True : filter (/= targetEdge) oldList
+    containEdge tar eList = targetEdge `elem` eList
     boxFilled box = all (\(Edge _ f) -> f) (filter (/= targetEdge) (edges box))
     (scoreChanged, newBoxList) = foldl applyAction (0, []) bList
 
 getHumanMove :: Set.Set Edge -> IO Int
 getHumanMove eSet = do
   putStrLn "Please make the next move."
-  putStrLn $ "Available edges: " ++ (show (printEdgeList $ Set.toList eSet))
-  mv <- getLine
-  return $ read mv
+  putStrLn $ "Available edges: " ++ show (printEdgeList $ Set.toList eSet)
+  read <$> getLine
 
+-- base minimax
 -- minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 -- minimax player (edgeset, boxlist, aiScore) edge
---   | edge == Edge 0 False = bestMove [minimax True x e | (x, e) <- initExpandedStates]
---   | terminal = (aiScore, edge)
---   | not player = bestMove [minimax True x e | (x, e) <- subExpandedStates]
---   | player = worstMove [minimax False x e | (x, e) <- subExpandedStates]
---   | otherwise = error "invalid game state"
+--   | rootnode        = bestMove [minimax True x e | (x, e) <- initExpandedStates]
+--   | terminal        = (aiScore, edge)
+--   | not player      = bestMove [minimax True x e | (x, e) <- subExpandedStates]
+--   | player          = worstMove [minimax False x e | (x, e) <- subExpandedStates]
+--   | otherwise       = error "invalid game state"
 --   where
 --     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
 --     subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
 --     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
 --     edgelist = Set.toList edgeset
 --     terminal = Set.null edgeset
+--     rootnode = edge == Edge 0 False
 
 minimaxDepLim :: (Eq t, Num t) => Bool -> t -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 minimaxDepLim player depth (edgeset, boxlist, aiScore) edge
-  | edge == Edge 0 False = bestMove [minimaxDepLim True newDepth x e | (x, e) <- initExpandedStates]
+  | rootnode     = bestMove [minimaxDepLim True newDepth x e | (x, e) <- initExpandedStates]
   | terminal || depth == 0 = (aiScore, edge)
-  | not player = bestMove [minimaxDepLim True newDepth x e | (x, e) <- subExpandedStates]
-  | player = worstMove [minimaxDepLim False newDepth x e | (x, e) <- subExpandedStates]
-  | otherwise = error "invalid game state"
+  | not player   = bestMove [minimaxDepLim True newDepth x e | (x, e) <- subExpandedStates]
+  | player       = worstMove [minimaxDepLim False newDepth x e | (x, e) <- subExpandedStates]
+  | otherwise    = error "invalid game state"
   where
     newDepth = depth - 1
     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
@@ -296,58 +280,24 @@ minimaxDepLim player depth (edgeset, boxlist, aiScore) edge
     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
     edgelist = Set.toList edgeset
     terminal = Set.null edgeset
+    rootnode = edge == Edge 0 False
 
--- minimaxAlgo :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
--- minimaxAlgo player (edgeset, boxlist, aiScore) edge
---   | edge == Edge 0 False = bestMove [minimaxAlgo True x e | (x, e) <- initExpandedStates]
---   | terminal = (aiScore, edge)
---   | not player = bestMove [minimaxAlgo True x e | (x, e) <- subExpandedStates]
---   | player = worstMove [minimaxAlgo False x e | (x, e) <- subExpandedStates]
---   | otherwise = error "invalid game state"
---   where
---     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
---     subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
---     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
---     edgelist = Set.toList edgeset
---     terminal = Set.null edgeset
-
--- minimaxAlgoPar :: (Bool, (Set.Set Edge, [Box], Int), Edge) -> (Int, Edge)
--- minimaxAlgoPar (player, (edgeset, boxlist, aiScore), edge)
---   | edge == Edge 0 False  = bestMove parResultInitMax
---   | terminal              = (aiScore, edge)
---   | not player            = bestMove parResultSubMax
---   | player                = worstMove parResultSubMin
---   | otherwise             = error "invalid game state"
---   where
---     parResultInitMax = map minimaxAlgoPar paramListInitMax `using` parList rseq
---     parResultSubMax = map minimaxAlgoPar paramListSubMax `using` parList rseq
---     parResultSubMin = map minimaxAlgoPar paramListSubMax `using` parList rseq
-
---     paramListInitMax = [ (True, x, e) | (x, e) <- initExpandedStates]
---     paramListSubMax = [ (True, x, e) | (x, e) <- subExpandedStates]
---     paramListSubMin = [ (False, x, e) | (x, e) <- subExpandedStates]
-
---     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
---     subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
---     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
---     edgelist = Set.toList edgeset
---     terminal = Set.null edgeset
 
 minimaxParDep :: (Eq a, Eq t, Num t, Num a) => (Bool, a, t, (Set.Set Edge, [Box], Int), Edge) -> (Int, Edge)
-minimaxParDep (player, parDepth, seqDep, (edgeset, boxlist, aiScore), edge)
-  | parDepth == 0 = minimaxDepLim player seqDep (edgeset, boxlist, aiScore) edge
-  | edge == Edge 0 False = bestMove parResultInitMax
-  | terminal = (aiScore, edge)
-  | not player = bestMove parResultSubMax
-  | player = worstMove parResultSubMin
-  | otherwise = error "invalid game state"
+minimaxParDep (player, parDepth, seqDepth, (edgeset, boxlist, aiScore), edge)
+  | parDepth == 0            = minimaxDepLim player seqDepth (edgeset, boxlist, aiScore) edge
+  | rootnode                 = bestMove parResultInitMax
+  | terminal                 = (aiScore, edge)
+  | not player               = bestMove parResultSubMax
+  | player                   = worstMove parResultSubMin
+  | otherwise                = error "invalid game state"
   where
     parResultInitMax = map minimaxParDep paramListInitMax `using` parList rseq
     parResultSubMax = map minimaxParDep paramListSubMax `using` parList rseq
     parResultSubMin = map minimaxParDep paramListSubMax `using` parList rseq
 
     newParDepth = parDepth - 1
-    newSeqDepth = seqDep - 1
+    newSeqDepth = seqDepth - 1
     paramListInitMax = [(True, newParDepth, newSeqDepth, x, e) | (x, e) <- initExpandedStates]
     paramListSubMax = [(True, newParDepth, newSeqDepth, x, e) | (x, e) <- subExpandedStates]
     paramListSubMin = [(False, newParDepth, newSeqDepth, x, e) | (x, e) <- subExpandedStates]
@@ -357,6 +307,8 @@ minimaxParDep (player, parDepth, seqDep, (edgeset, boxlist, aiScore), edge)
     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
     edgelist = Set.toList edgeset
     terminal = Set.null edgeset
+    rootnode = edge == Edge 0 False
+
 
 bestMove :: [(Int, Edge)] -> (Int, Edge)
 bestMove [(score, edge)] = (score, edge)

@@ -10,7 +10,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [config_file, mode] -> do someFunc config_file mode
+    [config_file, mode] -> do gameFunc config_file mode
     _ -> do
       prog <- getProgName
       putStrLn $ "Usage: " ++ prog ++ " <configuration_file> <program-mode>"
