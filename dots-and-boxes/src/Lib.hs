@@ -18,21 +18,26 @@ import Control.Parallel.Strategies
 someFunc :: String -> String -> IO ()
 someFunc config_file mode = do
   (eSet, bList) <- readConfig config_file
+  -- depth <- getDepth
   if mode == "algo-seq"
     then do
-      let _ = minimaxAlgo False (eSet, bList, 0) (Edge 0 False)
+      let (score,edge) = minimaxDepLim False 9 (eSet, bList, 0) (Edge 0 False)
       putStrLn "after minimaxAlgo"
+      putStrLn $ show edge
       return ()
   else if mode == "algo-par"
     then do
-      let _ = minimaxAlgoPar (False, (eSet, bList, 0), (Edge 0 False))
-      putStrLn "after minimaxAlgoPar"
+      let (score,edge) = minimaxParDep (False, 1, 9, (eSet, bList, 0), (Edge 0 False))
+      putStrLn "after minimaxParDep" 
+      putStrLn $ show edge
       return ()
     else do
       depth <- getDepth
       putStrLn (printEdgeList (Set.toList eSet))
       putStrLn "Game is starting..."
       gameStart eSet bList
+
+
 
 -- Int = unique identification per edge
 -- Bool = whether the edge is taken
@@ -201,8 +206,7 @@ gameAction targetEdge (eSet, bList) = (Set.delete targetEdge eSet, newBoxList, s
     newEdgeList oldList = (Edge (eid targetEdge) True) : (filter (/= targetEdge) oldList)
     containEdge tar eList = any (== targetEdge) eList
     boxFilled box = all (\(Edge _ f) -> f) (filter (/= targetEdge) (edges box))
-    (sx, er) = foldl applyAction (0, []) bList
-    (scoreChanged, newBoxList) = (trace (show sx) sx, er)
+    (scoreChanged, newBoxList) = foldl applyAction (0, []) bList
 
 getHumanMove :: Set.Set Edge -> IO Int
 getHumanMove eSet = do
@@ -225,6 +229,24 @@ minimax player (edgeset, boxlist, aiScore) edge
     edgelist = Set.toList edgeset
     terminal = Set.null edgeset
 
+
+
+-- minimaxDepLim :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
+minimaxDepLim player depth (edgeset, boxlist, aiScore) edge
+  | edge == Edge 0 False             = bestMove [minimaxDepLim True newDepth x e  | (x, e) <- initExpandedStates]
+  | terminal || depth == 0           = (aiScore, edge)
+  | not player                       = bestMove [minimaxDepLim True newDepth x e | (x, e) <- subExpandedStates]
+  | player                           = worstMove [minimaxDepLim False newDepth x e | (x, e) <- subExpandedStates]
+  | otherwise = error "invalid game state"
+  where
+    newDepth = depth - 1
+    initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
+    subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
+    getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
+    edgelist = Set.toList edgeset
+    terminal = Set.null edgeset
+
+
 minimaxAlgo :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 minimaxAlgo player (edgeset, boxlist, aiScore) edge
   | edge == Edge 0 False = bestMove [minimaxAlgo True x e | (x, e) <- initExpandedStates]
@@ -240,31 +262,92 @@ minimaxAlgo player (edgeset, boxlist, aiScore) edge
     terminal = Set.null edgeset
 
 
-minimaxAlgoPar :: (Bool, (Set.Set Edge, [Box], Int), Edge) -> (Int, Edge)
-minimaxAlgoPar (player, (edgeset, boxlist, aiScore), edge)
+-- minimaxAlgoPar :: (Bool, (Set.Set Edge, [Box], Int), Edge) -> (Int, Edge)
+-- minimaxAlgoPar (player, (edgeset, boxlist, aiScore), edge)
+--   | edge == Edge 0 False  = bestMove parResultInitMax 
+--   | terminal              = (aiScore, edge)
+--   | not player            = bestMove parResultSubMax
+--   | player                = worstMove parResultSubMin
+--   | otherwise             = error "invalid game state"
+--   where
+--     parResultInitMax = map minimaxAlgoPar paramListInitMax `using` parList rseq
+--     parResultSubMax = map minimaxAlgoPar paramListSubMax `using` parList rseq
+--     parResultSubMin = map minimaxAlgoPar paramListSubMax `using` parList rseq
+
+--     paramListInitMax = [ (True, x, e) | (x, e) <- initExpandedStates]
+--     paramListSubMax = [ (True, x, e) | (x, e) <- subExpandedStates]
+--     paramListSubMin = [ (False, x, e) | (x, e) <- subExpandedStates]
+
+--     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
+--     subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
+--     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
+--     edgelist = Set.toList edgeset
+--     terminal = Set.null edgeset
+
+-- + depth limited sequencial
+-- minimaxParDep :: (Bool, (Set.Set Edge, [Box], Int), Edge) -> (Int, Edge)
+-- minimaxParDep (player, depth, (edgeset, boxlist, aiScore), edge)
+--   | edge == Edge 0 False  = bestMove parResultInitMax 
+--   | terminal              = (aiScore, edge)
+--   | not player            = bestMove parResultSubMax
+--   | player                = worstMove parResultSubMin
+--   | otherwise             = error "invalid game state"
+--   where
+--     parResultInitMax = map minimaxParDep paramListInitMax `using` parList rpar
+--     parResultSubMax = map minimaxParDep paramListSubMax `using` parList rpar
+--     parResultSubMin = map minimaxParDep paramListSubMax `using` parList rpar
+
+--     paramListInitMax = [ (True, depth, x, e) | (x, e) <- initExpandedStates]
+--     paramListSubMax = [ (True, depth, x, e) | (x, e) <- subExpandedStates]
+--     paramListSubMin = [ (False, depth, x, e) | (x, e) <- subExpandedStates]
+
+--     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
+--     subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
+--     getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
+--     edgelist = Set.toList edgeset
+--     terminal = Set.null edgeset   
+
+minimaxParDep (player, parDepth, seqDep, (edgeset, boxlist, aiScore), edge)
+  | parDepth == 0         = minimaxDepLim player seqDep (edgeset, boxlist, aiScore) edge
   | edge == Edge 0 False  = bestMove parResultInitMax 
   | terminal              = (aiScore, edge)
   | not player            = bestMove parResultSubMax
   | player                = worstMove parResultSubMin
   | otherwise             = error "invalid game state"
   where
---     parResultInitMax :: [(Int, Edge)]
-    parResultInitMax = map minimaxAlgoPar paramListInitMax `using` parList rseq
+    parResultInitMax = map minimaxParDep paramListInitMax `using` parList rseq
+    parResultSubMax = map minimaxParDep paramListSubMax `using` parList rseq
+    parResultSubMin = map minimaxParDep paramListSubMax `using` parList rseq
 
---     parResultSubMax :: [(Int, Edge)]
-    parResultSubMax = map minimaxAlgoPar paramListSubMax `using` parList rseq
+    newParDepth = parDepth - 1
+    newSeqDepth = seqDep - 1
+    paramListInitMax = [ (True, newParDepth, newSeqDepth, x, e) | (x, e) <- initExpandedStates]
+    paramListSubMax = [ (True, newParDepth, newSeqDepth, x, e) | (x, e) <- subExpandedStates]
+    paramListSubMin = [ (False, newParDepth, newSeqDepth, x, e) | (x, e) <- subExpandedStates]
 
---     parResultSubMin :: [(Int, Edge)]
-    parResultSubMin = map minimaxAlgoPar paramListSubMax `using` parList rseq
+    initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
+    subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
+    getNextGameState someEdge = nextGameState someEdge (edgeset, boxlist) aiScore player
+    edgelist = Set.toList edgeset
+    terminal = Set.null edgeset
 
---     paramListInitMax :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
-    paramListInitMax = [ (True, x, e) | (x, e) <- initExpandedStates]
+minimaxParDepBuf (player, parDepth, seqDep, (edgeset, boxlist, aiScore), edge)
+  | parDepth == 0         = minimaxDepLim player seqDep (edgeset, boxlist, aiScore) edge
+  | edge == Edge 0 False  = bestMove parResultInitMax 
+  | terminal              = (aiScore, edge)
+  | not player            = bestMove parResultSubMax
+  | player                = worstMove parResultSubMin
+  | otherwise             = error "invalid game state"
+  where
+    parResultInitMax = map minimaxParDepBuf paramListInitMax `using` parBuffer 200 rseq
+    parResultSubMax = map minimaxParDepBuf paramListSubMax `using` parBuffer 200 rseq
+    parResultSubMin = map minimaxParDepBuf paramListSubMax `using` parBuffer 200 rseq
 
---     paramListSubMax :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
-    paramListSubMax = [ (True, x, e) | (x, e) <- subExpandedStates]
-
---     paramListSubMin :: [(Bool, (Set.Set Edge, [Box], Int), Edge)]
-    paramListSubMin = [ (False, x, e) | (x, e) <- subExpandedStates]
+    newParDepth = parDepth - 1
+    newSeqDepth = seqDep - 1
+    paramListInitMax = [ (True, newParDepth, newSeqDepth, x, e) | (x, e) <- initExpandedStates]
+    paramListSubMax = [ (True, newParDepth, newSeqDepth, x, e) | (x, e) <- subExpandedStates]
+    paramListSubMin = [ (False, newParDepth, newSeqDepth, x, e) | (x, e) <- subExpandedStates]
 
     initExpandedStates = [(getNextGameState e, e) | e <- edgelist]
     subExpandedStates = [(getNextGameState e, edge) | e <- edgelist]
