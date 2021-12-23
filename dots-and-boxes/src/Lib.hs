@@ -100,7 +100,7 @@ initBox h = do
 
 getAlgoDepth :: IO Int
 getAlgoDepth = do
-  putStrLn "Enter a depth for the AI search tree "
+  putStrLn "Enter a depth for the AI search tree: "
   putStrLn "(if running on 2x2 board, enter depth < 9 for speed up): "
   read <$> getLine
 
@@ -250,6 +250,7 @@ getHumanMove eSet = do
   putStrLn $ "Available edges: " ++ show (printEdgeList $ Set.toList eSet)
   read <$> getLine
 
+
 -- base minimax
 -- minimax :: Bool -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 -- minimax player (edgeset, boxlist, aiScore) edge
@@ -265,6 +266,19 @@ getHumanMove eSet = do
 --     edgelist = Set.toList edgeset
 --     terminal = Set.null edgeset
 --     rootnode = edge == Edge 0 False
+
+
+{-
+minimaxDepLim:
+
+param1: player -> current player (True for human, False for AI) 
+param2: depth -> levels remained to traverse from current node 
+param3: (edgeset, boxlist, aiScore) ->  edgeset is a set of available edges,
+                                        boxlist is a list of available boxes,
+                                        aiScore is the current score of AI/board.
+param4: edge -> the initially chosen edge for this branch of the tree
+return: (aiScore, Edge) -> best move for AI
+-}
 
 minimaxDepLim :: (Eq t, Num t) => Bool -> t -> (Set.Set Edge, [Box], Int) -> Edge -> (Int, Edge)
 minimaxDepLim player depth (edgeset, boxlist, aiScore) edge
@@ -282,7 +296,18 @@ minimaxDepLim player depth (edgeset, boxlist, aiScore) edge
     terminal = Set.null edgeset
     rootnode = edge == Edge 0 False
 
+{-
+minimaxParDep:
 
+param1: player -> current player (True for human, False for AI) 
+param2: parDepth -> parallel levels remained to traverse from current node
+param2: seqDepth -> sequential levels remained to traverse from current node 
+param4: (edgeset, boxlist, aiScore) ->  edgeset is a set of available edges,
+                                        boxlist is a list of available boxes,
+                                        aiScore is the current score of AI/board.
+param5: edge -> the initially chosen edge for this branch of the tree
+return: (aiScore, Edge) -> best move for AI
+-}
 minimaxParDep :: (Eq a, Eq t, Num t, Num a) => (Bool, a, t, (Set.Set Edge, [Box], Int), Edge) -> (Int, Edge)
 minimaxParDep (player, parDepth, seqDepth, (edgeset, boxlist, aiScore), edge)
   | parDepth == 0            = minimaxDepLim player seqDepth (edgeset, boxlist, aiScore) edge
@@ -309,12 +334,25 @@ minimaxParDep (player, parDepth, seqDepth, (edgeset, boxlist, aiScore), edge)
     terminal = Set.null edgeset
     rootnode = edge == Edge 0 False
 
+{-
+bestMove:
 
+param1: [(score, edge)] -> a list of available move and the associated heuristic
+
+return: (aiScore, Edge) -> best move for AI(with highest heuristic)
+-}
 bestMove :: [(Int, Edge)] -> (Int, Edge)
 bestMove [(score, edge)] = (score, edge)
 bestMove ((score, edge) : (score', edge') : xs) = bestMove (if score >= score' then (score, edge) : xs else (score', edge') : xs)
 bestMove _ = error "BestMove: not a valid move"
 
+{-
+worstMove:
+
+param1: [(score, edge)] -> a list of available move and the associated heuristic
+
+return: (aiScore, Edge) -> worst move for AI(with lowerst heuristic)
+-}
 worstMove :: [(Int, Edge)] -> (Int, Edge)
 worstMove [(score, edge)] = (score, edge)
 worstMove ((score, edge) : (score', edge') : xs) = worstMove (if score <= score' then (score, edge) : xs else (score', edge') : xs)

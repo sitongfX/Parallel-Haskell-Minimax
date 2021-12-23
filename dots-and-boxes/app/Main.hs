@@ -4,8 +4,6 @@ import Lib
 import System.Environment (getArgs, getProgName)
 import System.Exit (die)
 
--- import Control.Parallel(par)
-
 main :: IO ()
 main = do
   args <- getArgs
